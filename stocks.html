@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico">
+<title>股票篩選</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--radius:8px;}
+[data-theme="dark"]  { --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --bg4:#30363d; --border:#30363d; --border2:#21262d; --text:#e6edf3; --text2:#8b949e; --text3:#6e7681; --green:#3fb950; --green-dim:#1a3a20; --red:#f85149; --red-dim:#3a1a1a; --blue:#58a6ff; --blue-dim:#1a2a3a; --yellow:#d29922; --accent:#58a6ff; --shadow:rgba(0,0,0,.4); }
+[data-theme="light"] { --bg:#f0f2f5; --bg2:#fff; --bg3:#f6f8fa; --bg4:#eaeef2; --border:#d0d7de; --border2:#e8eaed; --text:#1a1f25; --text2:#57606a; --text3:#8c959f; --green:#1a7f37; --green-dim:#dafbe1; --red:#cf222e; --red-dim:#ffebe9; --blue:#0969da; --blue-dim:#ddf4ff; --yellow:#9a6700; --accent:#0969da; --shadow:rgba(0,0,0,.1); }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-bottom:40px;font-size:16px;}
+
+/* ─ Header ─ */
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:60;box-shadow:0 2px 8px var(--shadow);margin-bottom:12px;}
+.hdr h1{font-family:'JetBrains Mono',monospace;font-size:1em;font-weight:700;}
+.hdr p{font-size:.68em;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.icon-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);width:34px;height:34px;border-radius:var(--radius);cursor:pointer;font-size:1em;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.icon-btn:hover{background:var(--bg4);color:var(--text);border-color:var(--accent);}
+
+/* ─ Nav ─ */
+.nav-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;align-items:flex-start;justify-content:flex-start;padding:66px 0 0 12px;}
+.nav-ov.open{display:flex;}
+.nav-menu{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;}
+.nav-a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:.82em;color:var(--text2);text-decoration:none;transition:all .15s;}
+.nav-a:hover{background:var(--bg3);color:var(--text);}
+.nav-a.active{background:var(--blue-dim);color:var(--blue);}
+
+/* ─ Body ─ */
+.pg{max-width:1200px;margin:0 auto;padding:0 12px;display:flex;flex-direction:column;gap:10px;}
+
+/* ─ Buttons ─ */
+.btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);padding:6px 14px;border-radius:var(--radius);cursor:pointer;font-size:.8em;font-family:'Noto Sans TC',sans-serif;transition:all .15s;display:inline-flex;align-items:center;gap:4px;text-decoration:none;white-space:nowrap;}
+.btn:hover{border-color:var(--accent);color:var(--accent);background:var(--blue-dim);}
+
+/* ─ View dropdown ─ */
+.vwrap{position:relative;}
+.vbtn{background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 12px;border-radius:var(--radius);cursor:pointer;font-size:.82em;font-family:'JetBrains Mono',monospace;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+.vbtn:hover{border-color:var(--accent);}
+.vdrop{display:none;position:absolute;top:calc(100%+4px);left:0;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:5px;min-width:170px;z-index:100;box-shadow:0 8px 24px var(--shadow);}
+.vdrop.open{display:block;}
+.vopt{display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text2);padding:7px 12px;border-radius:6px;cursor:pointer;font-size:.8em;font-family:'Noto Sans TC',sans-serif;transition:all .15s;white-space:nowrap;}
+.vopt:hover{background:var(--bg3);color:var(--text);}
+.vopt.active{background:var(--blue-dim);color:var(--blue);}
+.vopt.sep{border-top:1px solid var(--border2);margin-top:4px;padding-top:8px;}
+
+/* ─ Toolbar ─ */
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.tl{display:flex;align-items:center;gap:6px;flex:1;flex-wrap:wrap;}
+
+/* ─ Cache info ─ */
+.cbar{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.72em;font-family:'JetBrains Mono',monospace;color:var(--text3);}
+
+/* ─ Filter panel ─ */
+.fpanel{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;flex-direction:column;gap:8px;}
+.frow1{display:flex;align-items:center;gap:8px;}
+.frow2{display:flex;align-items:center;gap:8px;}
+.flabel{font-size:.75em;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+.finput{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.8em;padding:5px 8px;outline:none;-moz-appearance:textfield;}
+.finput::-webkit-inner-spin-button{-webkit-appearance:none;}
+.finput:focus{border-color:var(--accent);}
+.fselect{background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:.78em;padding:5px 8px;outline:none;cursor:pointer;min-width:90px;}
+.fselect:focus{border-color:var(--accent);}
+.fsearch{flex:1;min-width:80px;}
+
+/* ─ Badge ─ */
+.badge{display:inline-flex;align-items:center;border-radius:20px;padding:2px 10px;font-size:.7em;font-family:'JetBrains Mono',monospace;white-space:nowrap;border:1px solid;}
+.badge-blue{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+.badge-red{background:var(--red-dim);border-color:var(--red);color:var(--red);}
+
+/* ─ Status ─ */
+.status{text-align:center;padding:40px;font-size:.85em;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.status a{color:var(--blue);}
+
+/* ─ Table ─ */
+.twrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{background:var(--bg3);color:var(--text3);font-size:.67em;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;cursor:pointer;user-select:none;}
+th:hover{color:var(--text);}
+th.r,td.r{text-align:right;}
+tbody tr{border-bottom:1px solid var(--border2);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--bg3);}
+td{padding:7px 10px;font-family:'JetBrains Mono',monospace;font-size:.8em;color:var(--text);white-space:nowrap;}
+.cd{color:var(--text3);font-size:.73em;}
+.ml{color:var(--blue);font-size:.7em;}
+.mo{color:var(--yellow);font-size:.7em;}
+.up{color:var(--red);font-weight:700;}
+.dn{color:var(--green);font-weight:700;}
+.ev{color:var(--text3);}
+.ib{color:var(--red);}
+.is{color:var(--green);}
+.iz{color:var(--text3);}
+
+/* ─ Sticky first two columns — no gap ─ */
+th.sticky-1, td.sticky-1 {
+  position:sticky; left:0; z-index:2;
+  background:var(--bg3);
+  border-right:none;
+}
+th.sticky-2, td.sticky-2 {
+  position:sticky; left:44px; z-index:2;
+  background:var(--bg3);
+  border-left:none;
+  box-shadow:3px 0 6px -2px var(--shadow);
+}
+tbody tr td.sticky-1,
+tbody tr td.sticky-2{background:var(--bg2);}
+tbody tr:hover td.sticky-1,
+tbody tr:hover td.sticky-2{background:var(--bg3);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="icon-btn" onclick="toggleNav()">☰</button>
+    <div><h1>STOCK · SCREEN</h1><p>股票篩選</p></div>
+  </div>
+  <button id="theme-btn" onclick="toggleTheme()" style="background:transparent;border:none;color:var(--text2);width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:1.3em;display:flex;align-items:center;justify-content:center;">🌙</button>
+</div>
+
+<div class="nav-ov" id="nav-ov" onclick="closeNav()">
+  <div class="nav-menu" onclick="event.stopPropagation()">
+    <a class="nav-a" href="index.html">📊 損益計算機</a>
+    <a class="nav-a active" href="stocks.html">🔍 股票篩選</a>
+    <a class="nav-a" href="events.html">📅 事件</a>
+  </div>
+</div>
+
+<div class="pg">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="tl">
+      <div class="vwrap" id="vwrap">
+        <button class="vbtn" onclick="toggleVDrop()"><span id="vlabel">漲幅排行</span> <span style="font-size:.7em;color:var(--text3)">▾</span></button>
+        <div class="vdrop" id="vdrop">
+          <button class="vopt active" data-v="gain"    onclick="setView('gain')">📈 漲幅排行</button>
+          <button class="vopt"        data-v="loss"    onclick="setView('loss')">📉 跌幅排行</button>
+          <button class="vopt sep"    data-v="fi_buy"  onclick="setView('fi_buy')">🌏 外資買超排行</button>
+          <button class="vopt"        data-v="fi_sell" onclick="setView('fi_sell')">🌏 外資賣超排行</button>
+          <button class="vopt sep"    data-v="si_buy"  onclick="setView('si_buy')">🏦 投信買超排行</button>
+          <button class="vopt"        data-v="si_sell" onclick="setView('si_sell')">🏦 投信賣超排行</button>
+        </div>
+      </div>
+      <span id="cnt-badge"></span>
+    </div>
+    <a class="btn" href="fetcher.html">📥 更新資料</a>
+  </div>
+
+  <!-- Cache info -->
+  <div class="cbar" id="cbar" style="display:none;">
+    快取時間：<span id="ctime" style="color:var(--text2);"></span>
+    <span id="ccnt" style="color:var(--blue);"></span>
+    <span id="cinst" style="color:var(--yellow);"></span>
+  </div>
+
+  <!-- Filter -->
+  <div class="fpanel">
+    <!-- Row 1: search + buttons -->
+    <div class="frow1">
+      <input class="finput fsearch" type="text" id="search" placeholder="搜尋股名或股號" style="font-family:'Noto Sans TC',sans-serif;" oninput="applyFilter()">
+      <button class="btn" onclick="applyFilter()">篩選</button>
+      <button class="btn" onclick="clearFilters()">清除</button>
+    </div>
+    <!-- Row 2: filter type dropdown + range -->
+    <div class="frow2">
+      <div class="vwrap" id="fwrap" style="flex-shrink:0;">
+        <button class="vbtn" style="font-size:.78em;padding:4px 10px;" onclick="toggleFDrop()">
+          <span id="flabel">漲跌幅 %</span> <span style="font-size:.7em;color:var(--text3)">▾</span>
+        </button>
+        <div class="vdrop" id="fdrop">
+          <button class="vopt active" data-ft="pct"   onclick="setFilterType('pct','漲跌幅 %')">漲跌幅 %</button>
+          <button class="vopt"        data-ft="vol"   onclick="setFilterType('vol','成交量 張')">成交量 張</button>
+          <button class="vopt"        data-ft="price" onclick="setFilterType('price','股價 元')">股價 元</button>
+        </div>
+      </div>
+      <input class="finput" type="number" id="fmin" placeholder="最小" step="any" style="width:72px;">
+      <span class="flabel">〜</span>
+      <input class="finput" type="number" id="fmax" placeholder="最大" step="any" style="width:72px;">
+      <span class="flabel" id="fnote" style="color:var(--text3);"></span>
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div id="content">
+    <div class="status">讀取快取中…</div>
+  </div>
+
+</div>
+
+<script>
+const CACHE_KEY = 'stocksData_v4';
+let allData = [];
+let currView = 'gain';
+let sortCol = null, sortAsc = false;
+
+const VIEW_LABELS = {
+  gain:'漲幅排行', loss:'跌幅排行',
+  fi_buy:'外資買超排行', fi_sell:'外資賣超排行',
+  si_buy:'投信買超排行', si_sell:'投信賣超排行'
+};
+
+/* ── Theme (shared) ── */
+let currTheme='dark';
+
+function applySharedSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('stockCalc')||'null');
+    if(s&&s.theme){ currTheme=s.theme; document.documentElement.setAttribute('data-theme',s.theme); }
+  }catch(e){}
+  const btn=document.getElementById('theme-btn');
+  if(btn) btn.textContent = currTheme==='dark'?'🌙':'☀️';
+}
+function toggleTheme(){
+  currTheme = currTheme==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',currTheme);
+  const btn=document.getElementById('theme-btn');
+  if(btn) btn.textContent = currTheme==='dark'?'🌙':'☀️';
+  try{
+    const existing=JSON.parse(localStorage.getItem('stockCalc')||'{}');
+    existing.theme=currTheme;
+    localStorage.setItem('stockCalc',JSON.stringify(existing));
+  }catch(e){}
+}
+
+/* ── Nav ── */
+function toggleNav(){ document.getElementById('nav-ov').classList.toggle('open'); }
+function closeNav(){ document.getElementById('nav-ov').classList.remove('open'); }
+
+/* ── View ── */
+function toggleVDrop(){ document.getElementById('vdrop').classList.toggle('open'); }
+function setView(v){
+  currView=v;
+  document.getElementById('vlabel').textContent=VIEW_LABELS[v];
+  document.querySelectorAll('.vopt').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
+  document.getElementById('vdrop').classList.remove('open');
+  sortCol=null;
+  applyFilter();
+}
+/* ── Filter type dropdown ── */
+let currFilterType = 'pct';
+function toggleFDrop(){ document.getElementById('fdrop').classList.toggle('open'); }
+function setFilterType(ft, label){
+  currFilterType=ft;
+  document.getElementById('flabel').textContent=label;
+  document.querySelectorAll('#fdrop .vopt').forEach(b=>b.classList.toggle('active',b.dataset.ft===ft));
+  document.getElementById('fdrop').classList.remove('open');
+  document.getElementById('fmin').value='';
+  document.getElementById('fmax').value='';
+}
+document.addEventListener('click',e=>{
+  if(!document.getElementById('vwrap').contains(e.target)) document.getElementById('vdrop').classList.remove('open');
+  if(document.getElementById('fwrap')&&!document.getElementById('fwrap').contains(e.target)) document.getElementById('fdrop').classList.remove('open');
+});
+
+function onFilterTypeChange(){ /* no action */ }
+
+function applyFilter(){
+  if(!allData.length){ document.getElementById('content').innerHTML='<div class="status">尚無資料，請先<a href="fetcher.html">下載資料</a></div>'; return; }
+
+  const search  = document.getElementById('search').value.trim().toLowerCase();
+  const ftype   = currFilterType;
+  const fminV   = document.getElementById('fmin').value;
+  const fmaxV   = document.getElementById('fmax').value;
+  const fmin    = fminV!==''?parseFloat(fminV):-Infinity;
+  const fmax    = fmaxV!==''?parseFloat(fmaxV):Infinity;
+  const hasRange= (fminV!==''||fmaxV!=='');
+
+  let list=[...allData];
+  let note='';
+
+  switch(currView){
+    case 'gain':
+      if(!hasRange&&!search){ list=list.filter(s=>s.pct>=9.5); note='預設：漲幅 ≥ 9.5%'; }
+      if(sortCol===null) list.sort((a,b)=>b.pct-a.pct);
+      break;
+    case 'loss':
+      if(!hasRange&&!search){ list=list.filter(s=>s.pct<=-9.5); note='預設：跌幅 ≥ 9.5%'; }
+      if(sortCol===null) list.sort((a,b)=>a.pct-b.pct);
+      break;
+    case 'fi_buy':  list=list.filter(s=>s.fi_net!=null);  if(sortCol===null)list.sort((a,b)=>(b.fi_net||0)-(a.fi_net||0)); break;
+    case 'fi_sell': list=list.filter(s=>s.fi_net!=null);  if(sortCol===null)list.sort((a,b)=>(a.fi_net||0)-(b.fi_net||0)); break;
+    case 'si_buy':  list=list.filter(s=>s.si_net!=null);  if(sortCol===null)list.sort((a,b)=>(b.si_net||0)-(a.si_net||0)); break;
+    case 'si_sell': list=list.filter(s=>s.si_net!=null);  if(sortCol===null)list.sort((a,b)=>(a.si_net||0)-(b.si_net||0)); break;
+  }
+
+  if(hasRange){
+    if(ftype==='pct')   list=list.filter(s=>s.pct>=fmin&&s.pct<=fmax);
+    if(ftype==='vol')   list=list.filter(s=>s.vol>=fmin&&s.vol<=fmax);
+    if(ftype==='price') list=list.filter(s=>s.close>=fmin&&s.close<=fmax);
+  }
+
+  if(search) list=list.filter(s=>s.code.toLowerCase().includes(search)||s.name.toLowerCase().includes(search));
+
+  if(sortCol!==null){
+    list.sort((a,b)=>{
+      const av=a[sortCol]??-Infinity, bv=b[sortCol]??-Infinity;
+      return typeof av==='string'?(sortAsc?av.localeCompare(bv):bv.localeCompare(av)):(sortAsc?av-bv:bv-av);
+    });
+  }
+
+  document.getElementById('fnote').textContent=note;
+  renderTable(list);
+}
+
+function clearFilters(){
+  document.getElementById('search').value='';
+  document.getElementById('fmin').value='';
+  document.getElementById('fmax').value='';
+  sortCol=null;
+  applyFilter();
+}
+
+/* ── Column sort ── */
+function colSort(col){
+  if(sortCol===col) sortAsc=!sortAsc;
+  else{ sortCol=col; sortAsc=false; }
+  applyFilter();
+}
+
+/* ── Render ── */
+function instTd(v){
+  if(v==null) return `<td class="r iz">—</td>`;
+  const cls=v>0?'ib':v<0?'is':'iz';
+  return `<td class="r ${cls}">${v>0?'+':''}${v.toLocaleString()}</td>`;
+}
+function fmtVal(v){
+  if(v>=100000) return (v/100000).toFixed(2)+'億';
+  if(v>=1000)   return (v/1000).toFixed(1)+'千萬';
+  return v.toLocaleString()+'千';
+}
+function thSort(col,label){ return `<th onclick="colSort('${col}')">${label}${sortCol===col?(sortAsc?' ↑':' ↓'):''}</th>`; }
+
+function renderTable(list){
+  document.getElementById('cnt-badge').innerHTML=`<span class="badge badge-blue">${list.length} 檔</span>`;
+  if(!list.length){ document.getElementById('content').innerHTML='<div class="status">無符合條件的股票</div>'; return; }
+
+  document.getElementById('content').innerHTML=`
+    <div class="twrap">
+      <table>
+        <thead><tr>
+          <th class="sticky-1" onclick="colSort('code')">股號${sortCol==='code'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="sticky-2" onclick="colSort('name')">名稱${sortCol==='name'?(sortAsc?' ↑':' ↓'):''}</th>
+          ${thSort('market','市場')}
+          <th class="r" onclick="colSort('close')">股價${sortCol==='close'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('change')">漲跌${sortCol==='change'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('pct')">漲跌幅${sortCol==='pct'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('vol')">成交量(張)${sortCol==='vol'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('val')">成交值${sortCol==='val'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('fi_net')">外資(張)${sortCol==='fi_net'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('si_net')">投信(張)${sortCol==='si_net'?(sortAsc?' ↑':' ↓'):''}</th>
+          <th class="r" onclick="colSort('dealer_net')">自營商(張)${sortCol==='dealer_net'?(sortAsc?' ↑':' ↓'):''}</th>
+        </tr></thead>
+        <tbody>
+          ${list.map(s=>{
+            const pc=s.pct>0?'up':s.pct<0?'dn':'ev';
+            const cs=s.change>0?'+':'';
+            const ps=s.pct>0?'+':'';
+            return `<tr>
+              <td class="cd sticky-1">${s.code}</td>
+              <td class="sticky-2">${s.name}</td>
+              <td class="${s.market==='上市'?'ml':'mo'}">${s.market}</td>
+              <td class="r" style="font-weight:600;">${s.close.toFixed(2)}</td>
+              <td class="r ${pc}">${s.change===0?'—':cs+s.change.toFixed(2)}</td>
+              <td class="r ${pc}">${ps}${s.pct.toFixed(2)}%</td>
+              <td class="r ev">${s.vol.toLocaleString()}</td>
+              <td class="r ev">${fmtVal(s.val)}</td>
+              ${instTd(s.fi_net)}
+              ${instTd(s.si_net)}
+              ${instTd(s.dealer_net)}
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+/* ── Init ── */
+window.onload=function(){
+  applySharedSettings();
+  const raw=localStorage.getItem(CACHE_KEY);
+  if(!raw){
+    document.getElementById('content').innerHTML='<div class="status">尚無快取資料，請先<a href="fetcher.html">下載資料</a></div>';
+    return;
+  }
+  try{
+    const cache=JSON.parse(raw);
+    allData=cache.data||[];
+    const hasInst=allData.some(s=>s.fi_net!=null);
+    document.getElementById('cbar').style.display='flex';
+    document.getElementById('ctime').textContent=new Date(cache.ts).toLocaleString('zh-TW');
+    document.getElementById('ccnt').textContent=`上市 ${cache.twsePriceCount||0} / 上櫃 ${cache.tpexPriceCount||0} 檔`;
+    document.getElementById('cinst').textContent=hasInst?`含三大法人（上市 ${cache.instTwseCount||0} / 上櫃 ${cache.instTpexCount||0} 筆）`:'（三大法人無資料）';
+    applyFilter();
+  }catch(e){
+    document.getElementById('content').innerHTML=`<div class="status">快取讀取失敗，請<a href="fetcher.html">重新下載</a></div>`;
+  }
+  ['fmin','fmax'].forEach(id=>{
+    document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter')applyFilter(); });
+  });
+};
+</script>
+</body>
+</html>

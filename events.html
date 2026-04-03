@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico">
+<title>事件</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--radius:8px;}
+[data-theme="dark"]  { --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --bg4:#30363d; --border:#30363d; --border2:#21262d; --text:#e6edf3; --text2:#8b949e; --text3:#6e7681; --green:#3fb950; --green-dim:#1a3a20; --red:#f85149; --red-dim:#3a1a1a; --blue:#58a6ff; --blue-dim:#1a2a3a; --yellow:#d29922; --yellow-dim:#2a2000; --accent:#58a6ff; --shadow:rgba(0,0,0,.4); }
+[data-theme="light"] { --bg:#f0f2f5; --bg2:#fff; --bg3:#f6f8fa; --bg4:#eaeef2; --border:#d0d7de; --border2:#e8eaed; --text:#1a1f25; --text2:#57606a; --text3:#8c959f; --green:#1a7f37; --green-dim:#dafbe1; --red:#cf222e; --red-dim:#ffebe9; --blue:#0969da; --blue-dim:#ddf4ff; --yellow:#9a6700; --yellow-dim:#fff3cd; --accent:#0969da; --shadow:rgba(0,0,0,.1); }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;padding-bottom:40px;font-size:16px;}
+
+.hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:60;box-shadow:0 2px 8px var(--shadow);margin-bottom:12px;}
+.hdr h1{font-family:'JetBrains Mono',monospace;font-size:1em;font-weight:700;}
+.hdr p{font-size:.68em;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.icon-btn{background:var(--bg3);border:1px solid var(--border);color:var(--text2);width:34px;height:34px;border-radius:var(--radius);cursor:pointer;font-size:1em;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+.icon-btn:hover{background:var(--bg4);color:var(--text);border-color:var(--accent);}
+
+.nav-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:200;align-items:flex-start;justify-content:flex-start;padding:66px 0 0 12px;}
+.nav-ov.open{display:flex;}
+.nav-menu{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:6px;min-width:170px;}
+.nav-a{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;font-size:.82em;color:var(--text2);text-decoration:none;transition:all .15s;}
+.nav-a:hover{background:var(--bg3);color:var(--text);}
+.nav-a.active{background:var(--blue-dim);color:var(--blue);}
+
+.pg{max-width:960px;margin:0 auto;padding:0 12px;display:flex;flex-direction:column;gap:10px;}
+
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border2);}
+.tab{background:transparent;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;color:var(--text3);padding:9px 16px;cursor:pointer;font-size:.85em;font-family:'Noto Sans TC',sans-serif;transition:all .15s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:600;}
+
+.cbar{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.72em;font-family:'JetBrains Mono',monospace;color:var(--text3);}
+.sbar{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;align-items:center;gap:8px;}
+.sinput{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:'Noto Sans TC',sans-serif;font-size:.82em;padding:5px 10px;outline:none;}
+.sinput:focus{border-color:var(--accent);}
+.ecnt{font-size:.72em;color:var(--text3);font-family:'JetBrains Mono',monospace;white-space:nowrap;}
+
+.status{text-align:center;padding:40px;font-size:.85em;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.status a{color:var(--blue);}
+.diag{padding:10px 14px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:8px;font-size:.75em;font-family:'JetBrains Mono',monospace;color:var(--yellow);line-height:1.8;}
+
+/* ─ Table for punish ─ */
+.twrap{background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;overflow-x:auto;}
+table{width:100%;border-collapse:collapse;}
+th{background:var(--bg3);color:var(--text3);font-size:.68em;font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;text-align:left;border-bottom:1px solid var(--border2);white-space:nowrap;}
+td{padding:8px 10px;font-family:'JetBrains Mono',monospace;font-size:.82em;color:var(--text);white-space:nowrap;border-bottom:1px solid var(--border2);}
+tbody tr:last-child td{border-bottom:none;}
+tbody tr:hover td{background:var(--bg3);}
+.ml{color:var(--blue);}
+.mo{color:var(--yellow);}
+.cnt-badge{display:inline-block;background:var(--red-dim);border:1px solid var(--red);border-radius:4px;padding:1px 6px;font-size:.75em;color:var(--red);font-weight:700;}
+.measure-badge{display:inline-block;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:4px;padding:1px 6px;font-size:.75em;color:var(--yellow);}
+
+/* ─ Cards for briefing ─ */
+.card-grid{display:flex;flex-direction:column;gap:8px;}
+.evt-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;}
+.evt-card:hover{background:var(--bg3);}
+.evt-row1{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+.evt-code{font-family:'JetBrains Mono',monospace;font-size:.75em;color:var(--text3);}
+.evt-name{font-weight:600;font-size:.9em;}
+.tag{font-size:.68em;padding:2px 8px;border-radius:4px;border:1px solid;font-family:'JetBrains Mono',monospace;}
+.tag-listed{background:var(--blue-dim);border-color:var(--blue);color:var(--blue);}
+.tag-otc{background:var(--yellow-dim);border-color:var(--yellow);color:var(--yellow);}
+.evt-kv{font-size:.78em;color:var(--text2);line-height:1.9;}
+.evt-kv span.k{color:var(--text3);}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <button class="icon-btn" onclick="toggleNav()">☰</button>
+    <div><h1>STOCK · EVENTS</h1><p>事件</p></div>
+  </div>
+  <button id="theme-btn" onclick="toggleTheme()" style="background:transparent;border:none;color:var(--text2);width:32px;height:32px;cursor:pointer;font-size:1.3em;display:flex;align-items:center;justify-content:center;">🌙</button>
+</div>
+
+<div class="nav-ov" id="nav-ov" onclick="closeNav()">
+  <div class="nav-menu" onclick="event.stopPropagation()">
+    <a class="nav-a" href="index.html">📊 損益計算機</a>
+    <a class="nav-a" href="stocks.html">🔍 股票篩選</a>
+    <a class="nav-a active" href="events.html">📅 事件</a>
+  </div>
+</div>
+
+<div class="pg">
+
+  <div class="tabs">
+    <button class="tab active" id="tab-punish"   onclick="switchTab('punish')">⚠️ 處置股票</button>
+    <button class="tab"        id="tab-briefing" onclick="switchTab('briefing')">📢 法說會</button>
+  </div>
+
+  <div class="cbar" id="cbar" style="display:none;">
+    資料時間：<span id="ctime" style="color:var(--text2);"></span>
+    <span style="flex:1;"></span>
+    <a href="fetcher.html" style="color:var(--blue);font-size:.9em;text-decoration:none;">📥 更新資料</a>
+  </div>
+
+  <div class="sbar">
+    <input class="sinput" type="text" id="esearch" placeholder="搜尋股名或股號…" oninput="renderCurrent()">
+    <span class="ecnt" id="ecnt"></span>
+  </div>
+
+  <div id="econtent"><div class="status">讀取快取中…</div></div>
+
+</div>
+
+<script>
+const CACHE_KEY = 'stocksData_v4';
+let briefingData = [];
+let punishData   = [];
+let currTab      = 'punish';
+
+/* ── Theme ── */
+let currTheme='dark';
+(function(){
+  try{ const s=JSON.parse(localStorage.getItem('stockCalc')||'null'); if(s&&s.theme){currTheme=s.theme;document.documentElement.setAttribute('data-theme',s.theme);} }catch(e){}
+  const b=document.getElementById('theme-btn'); if(b)b.textContent=currTheme==='dark'?'🌙':'☀️';
+})();
+function toggleTheme(){
+  currTheme=currTheme==='dark'?'light':'dark';
+  document.documentElement.setAttribute('data-theme',currTheme);
+  document.getElementById('theme-btn').textContent=currTheme==='dark'?'🌙':'☀️';
+  try{const e=JSON.parse(localStorage.getItem('stockCalc')||'{}');e.theme=currTheme;localStorage.setItem('stockCalc',JSON.stringify(e));}catch(e){}
+}
+
+/* ── Nav ── */
+function toggleNav(){ document.getElementById('nav-ov').classList.toggle('open'); }
+function closeNav(){ document.getElementById('nav-ov').classList.remove('open'); }
+
+/* ── Tabs ── */
+function switchTab(t){
+  currTab=t;
+  document.getElementById('tab-punish').classList.toggle('active',t==='punish');
+  document.getElementById('tab-briefing').classList.toggle('active',t==='briefing');
+  renderCurrent();
+}
+function renderCurrent(){
+  const q=document.getElementById('esearch').value.trim().toLowerCase();
+  currTab==='punish'?renderPunish(q):renderBriefing(q);
+}
+
+/* ── 處置 measure label ── */
+function measureLabel(text){
+  if(!text) return '—';
+  const t=String(text);
+  if(t.includes('五分鐘')||t.includes('5分鐘')||t.includes('5 分鐘')) return '5分盤';
+  if(t.includes('二十分鐘')||t.includes('20分鐘')||t.includes('20 分鐘')) return '20分盤';
+  // Try to extract minutes from text
+  const m=t.match(/(\d+)\s*分鐘/);
+  if(m) return m[1]+'分盤';
+  return text.slice(0,10)+'…';
+}
+
+/* ── 處置 count label ── */
+const ORDINALS=['1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th'];
+function ordinal(n){
+  const i=parseInt(n)||1;
+  return ORDINALS[i-1]||`${i}th`;
+}
+
+/* ── Render 處置 ── */
+function renderPunish(q){
+  const el=document.getElementById('econtent');
+  if(!punishData.length){
+    el.innerHTML='<div class="status">無處置股票資料。請先<a href="fetcher.html">下載資料</a>。<br><small style="color:var(--text3)">注意：若 API 路徑有誤會顯示無資料。</small></div>'; return;
+  }
+  let list=punishData.filter(s=>{
+    const code=getField(s,['Code','股票代號','code','證券代號']).toLowerCase();
+    const name=getField(s,['Name','公司名稱','name','證券名稱']).toLowerCase();
+    return !q||(code.includes(q)||name.includes(q));
+  });
+  document.getElementById('ecnt').textContent=`${list.length} 筆`;
+  if(!list.length){ el.innerHTML='<div class="status">無符合條件的資料</div>'; return; }
+
+  el.innerHTML=`<div class="twrap"><table>
+    <thead><tr>
+      <th>股號</th><th>名稱</th><th>市場</th>
+      <th>處置日期</th><th>次數</th><th>措施</th>
+    </tr></thead>
+    <tbody>${list.map(s=>{
+      const code  = getField(s,['Code','股票代號','code','證券代號']);
+      const name  = getField(s,['Name','公司名稱','name','證券名稱']);
+      const mkt   = s._market||'上市';
+      const date  = getField(s,['處置日期','Date','date','開始日期','起始日期','PunishDate']);
+      const count = getField(s,['處置次數','次數','Count','count','第幾次']);
+      const measure=getField(s,['處置措施','措施','Measure','measure','處分方式','備註']);
+      return `<tr>
+        <td style="font-family:'JetBrains Mono',monospace;color:var(--text3);font-size:.75em;">${code}</td>
+        <td style="font-weight:600;">${name}</td>
+        <td class="${mkt==='上市'?'ml':'mo'}" style="font-size:.72em;">${mkt}</td>
+        <td style="font-family:'JetBrains Mono',monospace;font-size:.75em;">${date||'—'}</td>
+        <td><span class="cnt-badge">${ordinal(count)}</span></td>
+        <td><span class="measure-badge">${measureLabel(measure)}</span></td>
+      </tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+/* ── Render 法說 ── */
+function renderBriefing(q){
+  const el=document.getElementById('econtent');
+  if(!briefingData.length){
+    el.innerHTML='<div class="status">無法說會資料。請先<a href="fetcher.html">下載資料</a>。<br><small style="color:var(--text3)">注意：法說會 API 路徑可能需要確認。</small></div>'; return;
+  }
+  let list=briefingData.filter(s=>{
+    const code=getField(s,['Code','股票代號','code','證券代號']).toLowerCase();
+    const name=getField(s,['Name','公司名稱','name','證券名稱']).toLowerCase();
+    return !q||(code.includes(q)||name.includes(q));
+  });
+  document.getElementById('ecnt').textContent=`${list.length} 筆`;
+  if(!list.length){ el.innerHTML='<div class="status">無符合條件的資料</div>'; return; }
+
+  // Display all key-value pairs dynamically
+  const SKIP=new Set(['Code','Name','股票代號','公司名稱','code','name','_market']);
+  el.innerHTML=`<div class="card-grid">${list.map(s=>{
+    const code=getField(s,['Code','股票代號','code']);
+    const name=getField(s,['Name','公司名稱','name']);
+    const mkt=s._market||'上市';
+    const kv=Object.entries(s)
+      .filter(([k,v])=>!SKIP.has(k)&&v!=null&&String(v).trim())
+      .map(([k,v])=>`<span class="k">${k}：</span>${v}`)
+      .join('　　');
+    return `<div class="evt-card">
+      <div class="evt-row1">
+        <span class="evt-code">${code}</span>
+        <span class="evt-name">${name}</span>
+        <span class="tag ${mkt==='上市'?'tag-listed':'tag-otc'}">${mkt}</span>
+      </div>
+      <div class="evt-kv">${kv||'（無詳細欄位）'}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+/* ── Util ── */
+function getField(obj, keys){
+  for(const k of keys){ if(obj[k]!=null) return String(obj[k]); }
+  return '';
+}
+
+/* ── Init ── */
+window.onload=function(){
+  const raw=localStorage.getItem(CACHE_KEY);
+  if(!raw){
+    document.getElementById('econtent').innerHTML='<div class="status">尚無快取資料，請先<a href="fetcher.html">下載資料</a></div>';
+    return;
+  }
+  try{
+    const cache=JSON.parse(raw);
+    briefingData=cache.briefing||[];
+    punishData=cache.punish||[];
+    document.getElementById('cbar').style.display='flex';
+    document.getElementById('ctime').textContent=new Date(cache.ts).toLocaleString('zh-TW');
+
+    // If no data, show debug info about what was received
+    const debugEl=document.getElementById('econtent');
+    if(!briefingData.length&&!punishData.length){
+      debugEl.innerHTML=`<div class="diag">⚠️ 快取中無法說/處置資料。可能原因：<br>
+        1. 這次下載時 API 未能成功抓取<br>
+        2. API 路徑有誤（需確認後調整）<br>
+        請重新<a href="fetcher.html" style="color:var(--blue)">下載資料</a>查看錯誤訊息。</div>`;
+    }
+    renderCurrent();
+  }catch(e){
+    document.getElementById('econtent').innerHTML=`<div class="status">快取讀取失敗，請<a href="fetcher.html">重新下載</a></div>`;
+  }
+};
+</script>
+</body>
+</html>

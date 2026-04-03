@@ -1,0 +1,11 @@
+# 如果你在這也有用 venv
+venv/
+
+# 如果你有用 node.js 處理前端 (雖然你目前沒提到，但預防萬一)
+node_modules/
+
+# 暫存檔
+.DS_Store
+
+# 測試資料
+*.json

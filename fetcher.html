@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="zh-TW" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="favicon.ico">
+<title>資料下載中…</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+[data-theme="dark"]  { --bg:#0d1117; --bg2:#161b22; --bg3:#21262d; --border:#30363d; --text:#e6edf3; --text2:#8b949e; --text3:#6e7681; --green:#3fb950; --green-dim:#1a3a20; --red:#f85149; --red-dim:#3a1a1a; --blue:#58a6ff; --blue-dim:#1a2a3a; --yellow:#d29922; }
+[data-theme="light"] { --bg:#f0f2f5; --bg2:#fff; --bg3:#f6f8fa; --border:#d0d7de; --text:#1a1f25; --text2:#57606a; --text3:#8c959f; --green:#1a7f37; --green-dim:#dafbe1; --red:#cf222e; --red-dim:#ffebe9; --blue:#0969da; --blue-dim:#ddf4ff; --yellow:#9a6700; }
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Noto Sans TC',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:28px 32px;width:100%;max-width:480px;}
+h2{font-family:'JetBrains Mono',monospace;font-size:1em;font-weight:700;margin-bottom:20px;color:var(--text);}
+.step{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:.85em;color:var(--text2);}
+.step:last-of-type{border-bottom:none;}
+.step-icon{width:22px;text-align:center;flex-shrink:0;font-size:1em;}
+.step-name{flex:1;}
+.step-status{font-family:'JetBrains Mono',monospace;font-size:.75em;color:var(--text3);}
+.step.done   .step-icon{color:var(--green);}
+.step.done   .step-status{color:var(--green);}
+.step.warn   .step-icon{color:var(--yellow);}
+.step.warn   .step-status{color:var(--yellow);}
+.step.err    .step-icon{color:var(--red);}
+.step.err    .step-status{color:var(--red);}
+.step.active .step-icon{color:var(--blue);}
+.step.active .step-status{color:var(--blue);}
+.summary{margin-top:18px;font-size:.8em;color:var(--text3);font-family:'JetBrains Mono',monospace;line-height:1.8;}
+.summary b{color:var(--text2);}
+.btn{display:block;width:100%;margin-top:20px;background:var(--blue);border:none;border-radius:8px;color:#fff;padding:10px;font-size:.9em;font-family:'Noto Sans TC',sans-serif;font-weight:500;cursor:pointer;text-align:center;text-decoration:none;transition:opacity .15s;}
+.btn:hover{opacity:.85;}
+.btn.sec{background:var(--bg3);border:1px solid var(--border);color:var(--text2);margin-top:8px;}
+.btn.sec:hover{color:var(--text);}
+.progress-bar{height:4px;background:var(--bg3);border-radius:2px;margin-top:18px;overflow:hidden;}
+.progress-fill{height:100%;background:var(--blue);border-radius:2px;transition:width .4s ease;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>📥 下載股票資料</h2>
+
+  <div class="step" id="s-price-twse"><span class="step-icon">⏳</span><span class="step-name">上市股價（TWSE）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-price-otc"> <span class="step-icon">⏳</span><span class="step-name">上櫃股價（TPEx）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-inst-twse"><span class="step-icon">⏳</span><span class="step-name">上市三大法人（TWSE）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-inst-otc"> <span class="step-icon">⏳</span><span class="step-name">上櫃三大法人（TPEx）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-briefing"> <span class="step-icon">⏳</span><span class="step-name">法說會（TWSE）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-punish">   <span class="step-icon">⏳</span><span class="step-name">處置股票（TWSE）</span><span class="step-status">等待中</span></div>
+  <div class="step" id="s-save">     <span class="step-icon">⏳</span><span class="step-name">合併資料並儲存快取</span><span class="step-status">等待中</span></div>
+
+  <div class="progress-bar"><div class="progress-fill" id="progress" style="width:0%"></div></div>
+  <div class="summary" id="summary"></div>
+  <div id="actions"></div>
+</div>
+
+<script>
+/* ── Config ── */
+const WORKER = 'https://selfstock-dqdhu2.fkyustd0478.workers.dev';
+const CACHE_KEY = 'stocksData_v4';
+
+/* ── Theme ── */
+(function(){
+  try{ const s=JSON.parse(localStorage.getItem('stockCalc')||'null'); if(s&&s.theme)document.documentElement.setAttribute('data-theme',s.theme); }catch(e){}
+})();
+
+/* ── Date helpers ── */
+function todayTWSE(){
+  const d=new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+function todayTPEx(){
+  const d=new Date();
+  const roc=d.getFullYear()-1911;
+  return `${roc}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+/* ── Proxy fetch ── */
+async function proxyGet(targetUrl){
+  const url=`${WORKER}/proxy?url=${encodeURIComponent(targetUrl)}`;
+  const r=await fetch(url,{cache:'no-cache'});
+  const json=await r.json();
+  if(r.status===503) throw Object.assign(new Error(json.error||'503'), {nonTradingDay:true});
+  if(!r.ok) throw new Error(json.error||`HTTP ${r.status}`);
+  return json;
+}
+
+/* ── Step helpers ── */
+function stepActive(id){
+  const el=document.getElementById(id);
+  el.className='step active';
+  el.querySelector('.step-status').textContent='下載中…';
+  el.querySelector('.step-icon').textContent='🔄';
+}
+function stepDone(id,msg){
+  const el=document.getElementById(id);
+  el.className='step done';
+  el.querySelector('.step-status').textContent=msg||'完成';
+  el.querySelector('.step-icon').textContent='✓';
+}
+function stepWarn(id,msg){
+  const el=document.getElementById(id);
+  el.className='step warn';
+  el.querySelector('.step-status').textContent=msg||'略過';
+  el.querySelector('.step-icon').textContent='⚠️';
+}
+function stepErr(id,msg){
+  const el=document.getElementById(id);
+  el.className='step err';
+  el.querySelector('.step-status').textContent=msg||'失敗';
+  el.querySelector('.step-icon').textContent='✕';
+}
+function setProgress(pct){ document.getElementById('progress').style.width=pct+'%'; }
+
+/* ── Parse helpers ── */
+function pn(v){ if(v==null)return null; const s=String(v).replace(/,/g,'').replace(/--/g,'').trim(); const n=parseFloat(s); return isNaN(n)?null:n; }
+function pi(v){ return parseInt(String(v||'0').replace(/,/g,'').trim())||0; }
+function isStock(code){ return /^\d{4}$/.test(String(code||'').trim()); }
+
+/* ── Normalizers ── */
+function normTWSEPrice(s){
+  if(!isStock(s.Code))return null;
+  const close=pn(s.ClosingPrice), change=pn(s.Change);
+  if(!close||close<=0)return null;
+  let pct=0; if(change!=null){const prev=close-change; if(prev>0)pct=(change/prev)*100;}
+  return {
+    code:String(s.Code).trim(), name:s.Name, market:'上市',
+    close, change:change||0, pct:+pct.toFixed(2),
+    vol:Math.round(pi(s.TradeVolume)/1000),
+    val:Math.round(pi(s.TradeValue)/1000),
+    fi_net:null, si_net:null, dealer_net:null
+  };
+}
+function normTPExPrice(s){
+  const code=String(s.SecuritiesCompanyCode||'').trim();
+  if(!isStock(code))return null;
+  const close=pn(s.Close), change=pn(s.Change);
+  if(!close||close<=0)return null;
+  let pct=0; if(change!=null){const prev=close-change; if(prev>0)pct=(change/prev)*100;}
+  return {
+    code, name:s.CompanyName, market:'上櫃',
+    close, change:change||0, pct:+pct.toFixed(2),
+    vol:Math.round(pi(s.TradingShares)/1000),
+    val:Math.round(pi(s.TradingAmount)/1000),
+    fi_net:null, si_net:null, dealer_net:null
+  };
+}
+
+/* TWSE T86: stat:"OK", fields:[...], data:[[row], ...] */
+function fillInstTWSE(json, codeMap){
+  if(!json||json.stat!=='OK'||!Array.isArray(json.data)) return 0;
+  // Fields: 0=代號, 1=名稱, 2=外資買進, 3=外資賣出, 4=外資買賣超, 6=投信買進, 7=投信賣出, 8=投信買賣超, 10=自營商自行, 11=自營商避險, 12=自營商合計
+  let cnt=0;
+  json.data.forEach(row=>{
+    const code=String(row[0]||'').trim();
+    if(!codeMap[code])return;
+    const fiNet=pn(row[4]), siNet=pn(row[8]);
+    const dealerSelf=pn(row[10]), dealerHedge=pn(row[11]);
+    const dealerNet=(dealerSelf!=null&&dealerHedge!=null)?dealerSelf+dealerHedge:pn(row[12]);
+    // TWSE unit is 股, convert to 張
+    codeMap[code].fi_net     = fiNet!=null     ? Math.round(fiNet/1000)     : null;
+    codeMap[code].si_net     = siNet!=null     ? Math.round(siNet/1000)     : null;
+    codeMap[code].dealer_net = dealerNet!=null  ? Math.round(dealerNet/1000) : null;
+    cnt++;
+  });
+  return cnt;
+}
+
+/* TPEx 3insti: tables[0].data — 25 cols, unit=股 → convert to 張
+   col 0=代號, 1=名稱,
+   2,3,4   = 外資買進/賣出/買賣超
+   5,6,7   = 外資(含陸)買進/賣出/買賣超
+   8,9,10  = 外資合計買進/賣出/買賣超
+   11,12,13= 投信買進/賣出/買賣超
+   14,15,16= 自營自行買進/賣出/買賣超
+   17,18,19= 自營避險買進/賣出/買賣超
+   20,21,22= 自營合計買進/賣出/買賣超
+   23      = 三大法人合計買賣超
+*/
+function fillInstTPEx(json, codeMap){
+  const table = json && json.tables && json.tables[0];
+  if(!table || !Array.isArray(table.data)) return 0;
+  let cnt=0;
+  table.data.forEach(row=>{
+    const code=String(row[0]||'').trim();
+    if(!codeMap[code])return;
+    const fiNet     = pn(row[4]);   // 外資買賣超股數
+    const siNet     = pn(row[13]);  // 投信買賣超股數
+    const dealerNet = pn(row[22]);  // 自營商合計買賣超股數
+    // unit = 股 → ÷1000 = 張
+    codeMap[code].fi_net     = fiNet!=null     ? Math.round(fiNet/1000)     : null;
+    codeMap[code].si_net     = siNet!=null     ? Math.round(siNet/1000)     : null;
+    codeMap[code].dealer_net = dealerNet!=null  ? Math.round(dealerNet/1000) : null;
+    cnt++;
+  });
+  return cnt;
+}
+
+/* ── Main ── */
+async function run(){
+  const errs=[];
+  let twseArr=[], tpexArr=[], instTwse={stat:'NA'}, instTpex={};
+
+  // 1. 上市股價
+  stepActive('s-price-twse');
+  try{
+    const d=await proxyGet('https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL');
+    twseArr=Array.isArray(d)?d:[];
+    stepDone('s-price-twse',`${twseArr.length} 筆`);
+  }catch(e){ stepErr('s-price-twse',e.message); errs.push('上市股價：'+e.message); }
+  setProgress(20);
+
+  // 2. 上櫃股價
+  stepActive('s-price-otc');
+  try{
+    // 主要端點
+    const d=await proxyGet('https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes');
+    tpexArr=Array.isArray(d)?d:[];
+    stepDone('s-price-otc',`${tpexArr.length} 筆`);
+  }catch(e){
+    if(e.nonTradingDay){ stepWarn('s-price-otc','非交易日，無資料'); }
+    else{ stepErr('s-price-otc',e.message); errs.push('上櫃股價：'+e.message); }
+  }
+  setProgress(40);
+
+  // 3. 上市三大法人
+  stepActive('s-inst-twse');
+  try{
+    const url=`https://www.twse.com.tw/rwd/zh/fund/T86?date=${todayTWSE()}&selectType=ALLBUT0999&response=json`;
+    instTwse=await proxyGet(url);
+    const cnt=Array.isArray(instTwse.data)?instTwse.data.length:0;
+    if(cnt===0&&instTwse.stat!=='OK'){ stepWarn('s-inst-twse','非交易日，無資料'); }
+    else{ stepDone('s-inst-twse',`${cnt} 筆`); }
+  }catch(e){
+    if(e.nonTradingDay){ stepWarn('s-inst-twse','非交易日，無資料'); }
+    else{ stepErr('s-inst-twse',e.message); errs.push('上市三大法人：'+e.message); }
+  }
+  setProgress(60);
+
+  // 4. 上櫃三大法人
+  stepActive('s-inst-otc');
+  try{
+    const url=`https://www.tpex.org.tw/web/stock/3insti/daily_trade/3itrade_hedge_result.php?l=zh-tw&o=json&se=EW&t=D&d=${todayTPEx()}&s=0,asc`;
+    instTpex=await proxyGet(url);
+    const cnt=(instTpex.tables&&instTpex.tables[0]&&Array.isArray(instTpex.tables[0].data))?instTpex.tables[0].data.length:0;
+    if(cnt===0){ stepWarn('s-inst-otc','非交易日或無資料'); }
+    else{ stepDone('s-inst-otc',`${cnt} 筆`); }
+  }catch(e){
+    if(e.nonTradingDay){ stepWarn('s-inst-otc','非交易日，無資料'); }
+    else{ stepErr('s-inst-otc',e.message); errs.push('上櫃三大法人：'+e.message); }
+  }
+  setProgress(80);
+
+  // 5. 法說會（上市 TWSE）
+  stepActive('s-briefing');
+  let briefingTWSE=[], briefingTPEx=[];
+  try{
+    // TWSE 法說會
+    const d=await proxyGet('https://www.twse.com.tw/rwd/zh/company/briefing?response=json');
+    const arr = Array.isArray(d) ? d : (d.data||d.result||[]);
+    briefingTWSE=arr.map(r=>({...r,_market:'上市'}));
+  }catch(e){ errs.push('上市法說：'+e.message); }
+  try{
+    // TPEx 法說會
+    const d=await proxyGet('https://www.tpex.org.tw/web/stock/ir/briefing/index.php?l=zh-tw&o=json');
+    const arr = Array.isArray(d) ? d : (d.aaData||d.data||d.result||[]);
+    briefingTPEx=arr.map(r=>({...r,_market:'上櫃'}));
+  }catch(e){ errs.push('上櫃法說：'+e.message); }
+  const briefingData=[...briefingTWSE,...briefingTPEx];
+  if(briefingData.length>0) stepDone('s-briefing',`${briefingData.length} 筆`);
+  else stepWarn('s-briefing','無資料或 API 路徑需確認');
+
+  // 6. 處置股票（上市 + 上櫃）
+  stepActive('s-punish');
+  let punishTWSE=[], punishTPEx=[];
+  try{
+    // TWSE 處置
+    const d=await proxyGet('https://www.twse.com.tw/rwd/zh/announcement/punishStock?response=json');
+    const arr = Array.isArray(d) ? d : (d.data||d.result||[]);
+    punishTWSE=arr.map(r=>({...r,_market:'上市'}));
+  }catch(e){ errs.push('上市處置：'+e.message); }
+  try{
+    // TPEx 處置
+    const d=await proxyGet('https://www.tpex.org.tw/web/stock/punish/index.php?l=zh-tw&o=json');
+    const arr = Array.isArray(d) ? d : (d.aaData||d.data||d.result||[]);
+    punishTPEx=arr.map(r=>({...r,_market:'上櫃'}));
+  }catch(e){ errs.push('上櫃處置：'+e.message); }
+  const punishData=[...punishTWSE,...punishTPEx];
+  if(punishData.length>0) stepDone('s-punish',`${punishData.length} 筆`);
+  else stepWarn('s-punish','無資料或 API 路徑需確認');
+  setProgress(88);
+
+  // 7. 合併
+  stepActive('s-save');
+  const twseNorm=twseArr.map(normTWSEPrice).filter(Boolean);
+  const tpexNorm=tpexArr.map(normTPExPrice).filter(Boolean);
+  const allData=[...twseNorm,...tpexNorm];
+
+  const codeMap={};
+  allData.forEach(s=>{ codeMap[s.code]=s; });
+  const instTwseCnt=fillInstTWSE(instTwse, codeMap);
+  const instTpexCnt=fillInstTPEx(instTpex, codeMap);
+
+  const payload={
+    ts:Date.now(),
+    date:new Date().toLocaleDateString('zh-TW'),
+    twsePriceCount: twseNorm.length,
+    tpexPriceCount: tpexNorm.length,
+    instTwseCount: instTwseCnt,
+    instTpexCount: instTpexCnt,
+    briefing: briefingData,
+    punish: punishData,
+    errors: errs,
+    data: allData
+  };
+
+  try{
+    localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    stepDone('s-save',`共 ${allData.length} 檔`);
+  }catch(e){
+    stepErr('s-save','localStorage 寫入失敗（空間不足？）');
+    errs.push('儲存失敗：'+e.message);
+  }
+  setProgress(100);
+
+  // Summary
+  const isWeekend = [0,6].includes(new Date().getDay());
+  const nonTradingNote = isWeekend ? '<br><span style="color:var(--yellow)">⚠️ 今天為週末，部分 API（上櫃、三大法人）僅在交易日開放，請週一到五盤後再抓取</span>' : '';
+  document.getElementById('summary').innerHTML=`
+    <b>上市股票</b>：${twseNorm.length} 檔<br>
+    <b>上櫃股票</b>：${tpexNorm.length} 檔${tpexNorm.length===0?' <span style="color:var(--yellow)">（非交易日）</span>':''}<br>
+    <b>法人資料（上市）</b>：${instTwseCnt} 筆${instTwseCnt===0?' <span style="color:var(--yellow)">（非交易日）</span>':''}<br>
+    <b>法人資料（上櫃）</b>：${instTpexCnt} 筆${instTpexCnt===0?' <span style="color:var(--yellow)">（非交易日）</span>':''}<br>
+    <b>法說會</b>：${briefingData.length} 筆<br>
+    <b>處置股票</b>：${punishData.length} 筆<br>
+    <b>更新時間</b>：${new Date().toLocaleString('zh-TW')}${nonTradingNote}<br>
+    ${errs.length>0?'<br><span style="color:var(--red)">❌ '+errs.join('<br>')+'</span>':''}
+  `;
+
+  document.getElementById('actions').innerHTML=`
+    <a class="btn" href="stocks.html">前往股票篩選</a>
+    <a class="btn sec" href="events.html">前往事件</a>
+    <a class="btn sec" href="fetcher.html">重新下載</a>
+  `;
+}
+
+/* ── Trading hours gate ── */
+function isTradingWindow(){
+  // Mon–Fri (1–5), after 15:30 Taiwan time
+  const now = new Date();
+  // Convert to Taiwan time (UTC+8)
+  const tw = new Date(now.toLocaleString('en-US', {timeZone:'Asia/Taipei'}));
+  const day = tw.getDay();          // 0=Sun, 6=Sat
+  const h = tw.getHours(), m = tw.getMinutes();
+  const afterClose = (h > 15) || (h === 15 && m >= 30);
+  return day >= 1 && day <= 5 && afterClose;
+}
+
+function cacheIsToday(ts){
+  if(!ts) return false;
+  const cacheDate = new Date(ts).toLocaleDateString('zh-TW');
+  const today     = new Date().toLocaleDateString('zh-TW');
+  return cacheDate === today;
+}
+
+function showBlocked(cache){
+  // Already have valid cache — show info and let user go to stocks
+  const tw = new Date(new Date().toLocaleString('en-US', {timeZone:'Asia/Taipei'}));
+  const day = tw.getDay();
+  const isWeekend = day===0||day===6;
+  const h = tw.getHours(), m = tw.getMinutes();
+  const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+
+  let reason = '';
+  if(isWeekend) reason = `今天是週末（台灣時間 ${timeStr}），API 不開放`;
+  else          reason = `現在是 ${timeStr}，尚未到收盤後 15:30`;
+
+  ['s-price-twse','s-price-otc','s-inst-twse','s-inst-otc','s-briefing','s-punish','s-save'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.className='step warn';
+    el.querySelector('.step-icon').textContent='⏭';
+    el.querySelector('.step-status').textContent='略過';
+  });
+  setProgress(100);
+
+  const cacheInfo = cache
+    ? `快取時間：${new Date(cache.ts).toLocaleString('zh-TW')}，共 ${(cache.data||[]).length} 檔`
+    : '';
+
+  document.getElementById('summary').innerHTML=`
+    <span style="color:var(--yellow)">⚠️ ${reason}</span><br>
+    已有今日快取，不重新下載。<br>
+    ${cacheInfo}
+  `;
+  document.getElementById('actions').innerHTML=`
+    <a class="btn" href="stocks.html">前往股票篩選</a>
+    <a class="btn sec" onclick="forceRun()">強制重新下載</a>
+  `;
+}
+
+function forceRun(){
+  document.getElementById('actions').innerHTML='';
+  document.getElementById('summary').innerHTML='';
+  // Reset steps
+  ['s-price-twse','s-price-otc','s-inst-twse','s-inst-otc','s-briefing','s-punish','s-save'].forEach(id=>{
+    const el=document.getElementById(id);
+    el.className='step';
+    el.querySelector('.step-icon').textContent='⏳';
+    el.querySelector('.step-status').textContent='等待中';
+  });
+  setProgress(0);
+  run();
+}
+
+/* ── Entry point ── */
+(function init(){
+  const raw = localStorage.getItem(CACHE_KEY);
+  let cache = null;
+  try{ cache = raw ? JSON.parse(raw) : null; }catch(e){}
+
+  const hasCache = cache && Array.isArray(cache.data) && cache.data.length > 0;
+  const todayCache = hasCache && cacheIsToday(cache.ts);
+  const inWindow = isTradingWindow();
+
+  if(hasCache && (!inWindow || todayCache && !inWindow)){
+    // Has cache AND not in trading window → skip download
+    showBlocked(cache);
+    return;
+  }
+
+  run();
+})();
+
+</script>
+</body>
+</html>
