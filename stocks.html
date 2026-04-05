@@ -148,12 +148,20 @@ tbody tr:hover td.sticky-2{background:var(--bg3);}
       </div>
       <span id="cnt-badge"></span>
     </div>
+    <!-- Date picker -->
+    <div style="display:flex;align-items:center;gap:6px;">
+      <input type="date" id="date-pick"
+        style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;
+               color:var(--text);font-family:'JetBrains Mono',monospace;font-size:.78em;
+               padding:5px 8px;outline:none;cursor:pointer;"
+        onchange="loadDate(this.value)">
+    </div>
     <a class="btn" href="fetcher.html">📥 更新資料</a>
   </div>
 
   <!-- Cache info -->
   <div class="cbar" id="cbar" style="display:none;">
-    快取時間：<span id="ctime" style="color:var(--text2);"></span>
+    <span>日期：</span><span id="ctime" style="color:var(--text2);"></span>
     <span id="ccnt" style="color:var(--blue);"></span>
     <span id="cinst" style="color:var(--yellow);"></span>
   </div>
@@ -192,11 +200,13 @@ tbody tr:hover td.sticky-2{background:var(--bg3);}
 
 </div>
 
+</div>
+
 <script>
 const CACHE_KEY = 'stocksData_v4';
-let allData = [];
+let allData  = [];
 let currView = 'gain';
-let sortCol = null, sortAsc = false;
+let sortCol  = null, sortAsc = false;
 
 const VIEW_LABELS = {
   gain:'漲幅排行', loss:'跌幅排行',
@@ -204,47 +214,50 @@ const VIEW_LABELS = {
   si_buy:'投信買超排行', si_sell:'投信賣超排行'
 };
 
-/* ── Theme (shared) ── */
-let currTheme='dark';
+/* ── Schema: short key → internal object key ── */
+const SHORT_TO_KEY = {
+  id:'code', n:'name', m:'market', o:'open', c:'close',
+  h:'high',  l:'low',  s:'change', p:'pct',  v:'vol',
+  val:'val', fi:'fi_net', si:'si_net', de:'dealer_net'
+};
 
+function rowToObj(fields, row){
+  const obj={};
+  fields.forEach((f,i)=>{ obj[SHORT_TO_KEY[f]||f] = row[i]??null; });
+  return obj;
+}
+
+/* ── Theme ── */
+let currTheme='dark';
 function applySharedSettings(){
-  try{
-    const s=JSON.parse(localStorage.getItem('stockCalc')||'null');
-    if(s&&s.theme){ currTheme=s.theme; document.documentElement.setAttribute('data-theme',s.theme); }
-  }catch(e){}
-  const btn=document.getElementById('theme-btn');
-  if(btn) btn.textContent = currTheme==='dark'?'🌙':'☀️';
+  try{ const s=JSON.parse(localStorage.getItem('stockCalc')||'null'); if(s&&s.theme){ currTheme=s.theme; document.documentElement.setAttribute('data-theme',s.theme); } }catch(e){}
+  const btn=document.getElementById('theme-btn'); if(btn) btn.textContent=currTheme==='dark'?'🌙':'☀️';
 }
 function toggleTheme(){
-  currTheme = currTheme==='dark'?'light':'dark';
+  currTheme=currTheme==='dark'?'light':'dark';
   document.documentElement.setAttribute('data-theme',currTheme);
-  const btn=document.getElementById('theme-btn');
-  if(btn) btn.textContent = currTheme==='dark'?'🌙':'☀️';
-  try{
-    const existing=JSON.parse(localStorage.getItem('stockCalc')||'{}');
-    existing.theme=currTheme;
-    localStorage.setItem('stockCalc',JSON.stringify(existing));
-  }catch(e){}
+  const btn=document.getElementById('theme-btn'); if(btn) btn.textContent=currTheme==='dark'?'🌙':'☀️';
+  try{ const e=JSON.parse(localStorage.getItem('stockCalc')||'{}'); e.theme=currTheme; localStorage.setItem('stockCalc',JSON.stringify(e)); }catch(e){}
 }
 
 /* ── Nav ── */
 function toggleNav(){ document.getElementById('nav-ov').classList.toggle('open'); }
 function closeNav(){ document.getElementById('nav-ov').classList.remove('open'); }
 
-/* ── View ── */
+/* ── View dropdown ── */
 function toggleVDrop(){ document.getElementById('vdrop').classList.toggle('open'); }
 function setView(v){
   currView=v;
   document.getElementById('vlabel').textContent=VIEW_LABELS[v];
   document.querySelectorAll('.vopt').forEach(b=>b.classList.toggle('active',b.dataset.v===v));
   document.getElementById('vdrop').classList.remove('open');
-  sortCol=null;
-  applyFilter();
+  sortCol=null; applyFilter();
 }
+
 /* ── Filter type dropdown ── */
-let currFilterType = 'pct';
+let currFilterType='pct';
 function toggleFDrop(){ document.getElementById('fdrop').classList.toggle('open'); }
-function setFilterType(ft, label){
+function setFilterType(ft,label){
   currFilterType=ft;
   document.getElementById('flabel').textContent=label;
   document.querySelectorAll('#fdrop .vopt').forEach(b=>b.classList.toggle('active',b.dataset.ft===ft));
@@ -257,35 +270,65 @@ document.addEventListener('click',e=>{
   if(document.getElementById('fwrap')&&!document.getElementById('fwrap').contains(e.target)) document.getElementById('fdrop').classList.remove('open');
 });
 
-function onFilterTypeChange(){ /* no action */ }
+/* ── Date helpers ── */
+function dateToPath(d){ const [y,m]=d.split('-'); return `data/${y}/${m}/${d}.json`; }
+function prevWeekday(d){ const dt=new Date(d+'T00:00:00'); do{ dt.setDate(dt.getDate()-1); }while(dt.getDay()===0||dt.getDay()===6); return dt.toISOString().slice(0,10); }
+function todayStr(){ return new Date().toLocaleDateString('sv-SE'); }
 
+async function findLatestDate(){
+  let d=todayStr();
+  for(let i=0;i<10;i++){
+    try{ const r=await fetch(dateToPath(d),{method:'HEAD'}); if(r.ok)return d; }catch(e){}
+    d=prevWeekday(d);
+  }
+  return null;
+}
+
+/* ── Data loading ── */
+function showCacheBar(dateStr, count, hasInst){
+  document.getElementById('cbar').style.display='flex';
+  document.getElementById('ctime').textContent=dateStr;
+  document.getElementById('ccnt').textContent=`共 ${count} 檔`;
+  document.getElementById('cinst').textContent=hasInst?'含三大法人':'（三大法人無資料）';
+}
+
+async function loadDateFile(dateStr){
+  document.getElementById('content').innerHTML=`<div class="status">載入 ${dateStr}…</div>`;
+  try{
+    const r=await fetch(dateToPath(dateStr),{cache:'no-cache'});
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const json=await r.json();
+    const fields=json.f||[], rows=json.d||[];
+    allData=rows.map(row=>rowToObj(fields,row));
+    const hasInst=allData.some(s=>s.fi_net!=null&&s.fi_net!==0);
+    showCacheBar(dateStr, allData.length, hasInst);
+    const picker=document.getElementById('date-pick'); if(picker) picker.value=dateStr;
+    applyFilter(); return true;
+  }catch(e){
+    document.getElementById('content').innerHTML=`<div class="status">找不到 ${dateStr} 的資料<br><small style="color:var(--text3)">${e.message}</small></div>`;
+    return false;
+  }
+}
+
+async function loadDate(dateStr){ if(!dateStr)return; sortCol=null; await loadDateFile(dateStr); }
+
+/* ── Filter ── */
 function applyFilter(){
-  if(!allData.length){ document.getElementById('content').innerHTML='<div class="status">尚無資料，請先<a href="fetcher.html">下載資料</a></div>'; return; }
-
-  const search  = document.getElementById('search').value.trim().toLowerCase();
-  const ftype   = currFilterType;
-  const fminV   = document.getElementById('fmin').value;
-  const fmaxV   = document.getElementById('fmax').value;
-  const fmin    = fminV!==''?parseFloat(fminV):-Infinity;
-  const fmax    = fmaxV!==''?parseFloat(fmaxV):Infinity;
-  const hasRange= (fminV!==''||fmaxV!=='');
-
-  let list=[...allData];
-  let note='';
+  if(!allData.length){ document.getElementById('content').innerHTML='<div class="status">尚無資料</div>'; return; }
+  const search=document.getElementById('search').value.trim().toLowerCase();
+  const ftype=currFilterType;
+  const fminV=document.getElementById('fmin').value, fmaxV=document.getElementById('fmax').value;
+  const fmin=fminV!==''?parseFloat(fminV):-Infinity, fmax=fmaxV!==''?parseFloat(fmaxV):Infinity;
+  const hasRange=(fminV!==''||fmaxV!=='');
+  let list=[...allData], note='';
 
   switch(currView){
-    case 'gain':
-      if(!hasRange&&!search){ list=list.filter(s=>s.pct>=9.5); note='預設：漲幅 ≥ 9.5%'; }
-      if(sortCol===null) list.sort((a,b)=>b.pct-a.pct);
-      break;
-    case 'loss':
-      if(!hasRange&&!search){ list=list.filter(s=>s.pct<=-9.5); note='預設：跌幅 ≥ 9.5%'; }
-      if(sortCol===null) list.sort((a,b)=>a.pct-b.pct);
-      break;
-    case 'fi_buy':  list=list.filter(s=>s.fi_net!=null);  if(sortCol===null)list.sort((a,b)=>(b.fi_net||0)-(a.fi_net||0)); break;
-    case 'fi_sell': list=list.filter(s=>s.fi_net!=null);  if(sortCol===null)list.sort((a,b)=>(a.fi_net||0)-(b.fi_net||0)); break;
-    case 'si_buy':  list=list.filter(s=>s.si_net!=null);  if(sortCol===null)list.sort((a,b)=>(b.si_net||0)-(a.si_net||0)); break;
-    case 'si_sell': list=list.filter(s=>s.si_net!=null);  if(sortCol===null)list.sort((a,b)=>(a.si_net||0)-(b.si_net||0)); break;
+    case 'gain':  if(!hasRange&&!search){list=list.filter(s=>s.pct>=9.5);note='預設：漲幅 ≥ 9.5%';} if(sortCol===null)list.sort((a,b)=>b.pct-a.pct); break;
+    case 'loss':  if(!hasRange&&!search){list=list.filter(s=>s.pct<=-9.5);note='預設：跌幅 ≥ 9.5%';} if(sortCol===null)list.sort((a,b)=>a.pct-b.pct); break;
+    case 'fi_buy':  list=list.filter(s=>s.fi_net!=null); if(sortCol===null)list.sort((a,b)=>(b.fi_net||0)-(a.fi_net||0)); break;
+    case 'fi_sell': list=list.filter(s=>s.fi_net!=null); if(sortCol===null)list.sort((a,b)=>(a.fi_net||0)-(b.fi_net||0)); break;
+    case 'si_buy':  list=list.filter(s=>s.si_net!=null); if(sortCol===null)list.sort((a,b)=>(b.si_net||0)-(a.si_net||0)); break;
+    case 'si_sell': list=list.filter(s=>s.si_net!=null); if(sortCol===null)list.sort((a,b)=>(a.si_net||0)-(b.si_net||0)); break;
   }
 
   if(hasRange){
@@ -293,16 +336,11 @@ function applyFilter(){
     if(ftype==='vol')   list=list.filter(s=>s.vol>=fmin&&s.vol<=fmax);
     if(ftype==='price') list=list.filter(s=>s.close>=fmin&&s.close<=fmax);
   }
-
-  if(search) list=list.filter(s=>s.code.toLowerCase().includes(search)||s.name.toLowerCase().includes(search));
+  if(search) list=list.filter(s=>(s.code||'').toLowerCase().includes(search)||(s.name||'').toLowerCase().includes(search));
 
   if(sortCol!==null){
-    list.sort((a,b)=>{
-      const av=a[sortCol]??-Infinity, bv=b[sortCol]??-Infinity;
-      return typeof av==='string'?(sortAsc?av.localeCompare(bv):bv.localeCompare(av)):(sortAsc?av-bv:bv-av);
-    });
+    list.sort((a,b)=>{ const av=a[sortCol]??-Infinity,bv=b[sortCol]??-Infinity; return typeof av==='string'?(sortAsc?av.localeCompare(bv):bv.localeCompare(av)):(sortAsc?av-bv:bv-av); });
   }
-
   document.getElementById('fnote').textContent=note;
   renderTable(list);
 }
@@ -311,97 +349,80 @@ function clearFilters(){
   document.getElementById('search').value='';
   document.getElementById('fmin').value='';
   document.getElementById('fmax').value='';
-  sortCol=null;
-  applyFilter();
+  sortCol=null; applyFilter();
 }
 
 /* ── Column sort ── */
-function colSort(col){
-  if(sortCol===col) sortAsc=!sortAsc;
-  else{ sortCol=col; sortAsc=false; }
-  applyFilter();
-}
+function colSort(col){ if(sortCol===col)sortAsc=!sortAsc; else{sortCol=col;sortAsc=false;} applyFilter(); }
 
 /* ── Render ── */
-function instTd(v){
-  if(v==null) return `<td class="r iz">—</td>`;
-  const cls=v>0?'ib':v<0?'is':'iz';
-  return `<td class="r ${cls}">${v>0?'+':''}${v.toLocaleString()}</td>`;
-}
-function fmtVal(v){
-  if(v>=100000) return (v/100000).toFixed(2)+'億';
-  if(v>=1000)   return (v/1000).toFixed(1)+'千萬';
-  return v.toLocaleString()+'千';
-}
-function thSort(col,label){ return `<th onclick="colSort('${col}')">${label}${sortCol===col?(sortAsc?' ↑':' ↓'):''}</th>`; }
+function instTd(v){ if(v==null)return`<td class="r iz">—</td>`; const cls=v>0?'ib':v<0?'is':'iz'; return`<td class="r ${cls}">${v>0?'+':''}${v.toLocaleString()}</td>`; }
+function fmtVal(v){ if(!v)return'—'; if(v>=100000000)return(v/100000000).toFixed(2)+'億'; if(v>=10000000)return(v/10000000).toFixed(1)+'千萬'; if(v>=1000000)return(v/1000000).toFixed(1)+'百萬'; return v.toLocaleString(); }
+function sortTh(col,label){ return`<th onclick="colSort('${col}')">${label}${sortCol===col?(sortAsc?' ↑':' ↓'):''}</th>`; }
 
 function renderTable(list){
   document.getElementById('cnt-badge').innerHTML=`<span class="badge badge-blue">${list.length} 檔</span>`;
   if(!list.length){ document.getElementById('content').innerHTML='<div class="status">無符合條件的股票</div>'; return; }
-
   document.getElementById('content').innerHTML=`
-    <div class="twrap">
-      <table>
-        <thead><tr>
-          <th class="sticky-1" onclick="colSort('code')">股號${sortCol==='code'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="sticky-2" onclick="colSort('name')">名稱${sortCol==='name'?(sortAsc?' ↑':' ↓'):''}</th>
-          ${thSort('market','市場')}
-          <th class="r" onclick="colSort('close')">股價${sortCol==='close'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('change')">漲跌${sortCol==='change'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('pct')">漲跌幅${sortCol==='pct'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('vol')">成交量(張)${sortCol==='vol'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('val')">成交值${sortCol==='val'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('fi_net')">外資(張)${sortCol==='fi_net'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('si_net')">投信(張)${sortCol==='si_net'?(sortAsc?' ↑':' ↓'):''}</th>
-          <th class="r" onclick="colSort('dealer_net')">自營商(張)${sortCol==='dealer_net'?(sortAsc?' ↑':' ↓'):''}</th>
-        </tr></thead>
-        <tbody>
-          ${list.map(s=>{
-            const pc=s.pct>0?'up':s.pct<0?'dn':'ev';
-            const cs=s.change>0?'+':'';
-            const ps=s.pct>0?'+':'';
-            return `<tr>
-              <td class="cd sticky-1">${s.code}</td>
-              <td class="sticky-2">${s.name}</td>
-              <td class="${s.market==='上市'?'ml':'mo'}">${s.market}</td>
-              <td class="r" style="font-weight:600;">${s.close.toFixed(2)}</td>
-              <td class="r ${pc}">${s.change===0?'—':cs+s.change.toFixed(2)}</td>
-              <td class="r ${pc}">${ps}${s.pct.toFixed(2)}%</td>
-              <td class="r ev">${s.vol.toLocaleString()}</td>
-              <td class="r ev">${fmtVal(s.val)}</td>
-              ${instTd(s.fi_net)}
-              ${instTd(s.si_net)}
-              ${instTd(s.dealer_net)}
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
+    <div class="twrap"><table>
+      <thead><tr>
+        <th class="sticky-1" onclick="colSort('code')">股號${sortCol==='code'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="sticky-2" onclick="colSort('name')">名稱${sortCol==='name'?(sortAsc?' ↑':' ↓'):''}</th>
+        ${sortTh('market','市場')}
+        ${sortTh('close','股價')}
+        <th class="r" onclick="colSort('change')">漲跌${sortCol==='change'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('pct')">漲跌幅${sortCol==='pct'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('vol')">成交量(張)${sortCol==='vol'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('val')">成交值${sortCol==='val'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('fi_net')">外資(張)${sortCol==='fi_net'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('si_net')">投信(張)${sortCol==='si_net'?(sortAsc?' ↑':' ↓'):''}</th>
+        <th class="r" onclick="colSort('dealer_net')">自營商(張)${sortCol==='dealer_net'?(sortAsc?' ↑':' ↓'):''}</th>
+      </tr></thead>
+      <tbody>${list.map(s=>{
+        const pc=s.pct>0?'up':s.pct<0?'dn':'ev';
+        const cs=s.change>0?'+':'', ps=s.pct>0?'+':'';
+        return`<tr>
+          <td class="cd sticky-1">${s.code||''}</td>
+          <td class="sticky-2">${s.name||''}</td>
+          <td class="${s.market==='上市'?'ml':'mo'}">${s.market||''}</td>
+          <td class="r" style="font-weight:600;">${typeof s.close==='number'?s.close.toFixed(2):'—'}</td>
+          <td class="r ${pc}">${s.change===0?'—':cs+(s.change||0).toFixed(2)}</td>
+          <td class="r ${pc}">${ps}${(s.pct||0).toFixed(2)}%</td>
+          <td class="r ev">${(s.vol||0).toLocaleString()}</td>
+          <td class="r ev">${fmtVal(s.val)}</td>
+          ${instTd(s.fi_net)}${instTd(s.si_net)}${instTd(s.dealer_net)}
+        </tr>`;
+      }).join('')}</tbody>
+    </table></div>`;
 }
 
 /* ── Init ── */
-window.onload=function(){
+window.onload=async function(){
   applySharedSettings();
-  const raw=localStorage.getItem(CACHE_KEY);
-  if(!raw){
-    document.getElementById('content').innerHTML='<div class="status">尚無快取資料，請先<a href="fetcher.html">下載資料</a></div>';
-    return;
+  const picker=document.getElementById('date-pick'); if(picker) picker.max=todayStr();
+
+  // 1. Try new array-format date files
+  const latest=await findLatestDate();
+  if(latest){
+    await loadDateFile(latest);
+  } else {
+    // 2. Fall back to stocks.json (old openapi format)
+    let loaded=false;
+    try{
+      const r=await fetch('data/stocks.json',{cache:'no-cache'});
+      if(r.ok){
+        const cache=await r.json();
+        if(Array.isArray(cache.data)&&cache.data.length>0){
+          allData=cache.data;
+          showCacheBar(cache.date||'—',allData.length,allData.some(s=>s.fi_net!=null));
+          loaded=true; applyFilter();
+        }
+      }
+    }catch(e){}
+    if(!loaded) document.getElementById('content').innerHTML='<div class="status">尚無資料<br><small style="color:var(--text3)">等待 GitHub Actions 自動更新，或前往<a href="fetcher.html">手動下載</a></small></div>';
   }
-  try{
-    const cache=JSON.parse(raw);
-    allData=cache.data||[];
-    const hasInst=allData.some(s=>s.fi_net!=null);
-    document.getElementById('cbar').style.display='flex';
-    document.getElementById('ctime').textContent=new Date(cache.ts).toLocaleString('zh-TW');
-    document.getElementById('ccnt').textContent=`上市 ${cache.twsePriceCount||0} / 上櫃 ${cache.tpexPriceCount||0} 檔`;
-    document.getElementById('cinst').textContent=hasInst?`含三大法人（上市 ${cache.instTwseCount||0} / 上櫃 ${cache.instTpexCount||0} 筆）`:'（三大法人無資料）';
-    applyFilter();
-  }catch(e){
-    document.getElementById('content').innerHTML=`<div class="status">快取讀取失敗，請<a href="fetcher.html">重新下載</a></div>`;
-  }
-  ['fmin','fmax'].forEach(id=>{
-    document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter')applyFilter(); });
-  });
+
+  ['fmin','fmax'].forEach(id=>{ document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter')applyFilter(); }); });
 };
 </script>
 </body>
