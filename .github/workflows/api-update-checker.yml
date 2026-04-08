@@ -1,0 +1,45 @@
+# api-update-checker.yml
+# 每個交易日自動執行 API 更新時間測試
+# 台灣時間 13:40 啟動（UTC 05:40），確保在 13:45 前就緒
+
+name: API Update Time Checker
+
+on:
+  # 週一至週五 UTC 05:40（= 台灣 13:40）
+  schedule:
+    - cron: "40 5 * * 1-5"
+
+  # 手動觸發（方便測試）
+  workflow_dispatch:
+
+jobs:
+  check-api-update-time:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330  # 最長 5.5 小時（13:40 ~ 19:00 + 緩衝）
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Set timezone
+        run: echo "TZ=Asia/Taipei" >> "$GITHUB_ENV"
+
+      - name: Run API update checker
+        working-directory: mystocktool
+        run: python api_update_checker.py
+
+      - name: Upload logs as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-checker-logs-${{ github.run_number }}
+          path: mystocktool/logs/*.log
+          retention-days: 30
