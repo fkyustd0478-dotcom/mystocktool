@@ -124,7 +124,8 @@ tbody tr:hover td.sticky-2{background:var(--bg3);}
 
 <div class="nav-ov" id="nav-ov" onclick="closeNav()">
   <div class="nav-menu" onclick="event.stopPropagation()">
-    <a class="nav-a" href="index.html">📊 損益計算機</a>
+    <a class="nav-a" href="index.html">🏠 Dashboard</a>
+    <a class="nav-a" href="calculator.html">📊 損益計算機</a>
     <a class="nav-a active" href="stocks.html">🔍 股票篩選</a>
     <a class="nav-a" href="events.html">📅 事件</a>
   </div>
@@ -271,7 +272,7 @@ document.addEventListener('click',e=>{
 });
 
 /* ── Date helpers ── */
-function dateToPath(d){ const [y,m]=d.split('-'); return `data/${y}/${m}/${d}.json`; }
+function dateToPath(d){ const [y,m]=d.split('-'); return `daily_data/${y}/${m}/${d}.json`; }
 function prevWeekday(d){ const dt=new Date(d+'T00:00:00'); do{ dt.setDate(dt.getDate()-1); }while(dt.getDay()===0||dt.getDay()===6); return dt.toISOString().slice(0,10); }
 function todayStr(){ return new Date().toLocaleDateString('sv-SE'); }
 
@@ -406,20 +407,7 @@ window.onload=async function(){
   if(latest){
     await loadDateFile(latest);
   } else {
-    // 2. Fall back to stocks.json (old openapi format)
-    let loaded=false;
-    try{
-      const r=await fetch('data/stocks.json',{cache:'no-cache'});
-      if(r.ok){
-        const cache=await r.json();
-        if(Array.isArray(cache.data)&&cache.data.length>0){
-          allData=cache.data;
-          showCacheBar(cache.date||'—',allData.length,allData.some(s=>s.fi_net!=null));
-          loaded=true; applyFilter();
-        }
-      }
-    }catch(e){}
-    if(!loaded) document.getElementById('content').innerHTML='<div class="status">尚無資料<br><small style="color:var(--text3)">等待 GitHub Actions 自動更新，或前往<a href="fetcher.html">手動下載</a></small></div>';
+    document.getElementById('content').innerHTML='<div class="status">尚無資料<br><small style="color:var(--text3)">等待 GitHub Actions 自動更新，或前往<a href="fetcher.html">手動下載</a></small></div>';
   }
 
   ['fmin','fmax'].forEach(id=>{ document.getElementById(id).addEventListener('keydown',e=>{ if(e.key==='Enter')applyFilter(); }); });

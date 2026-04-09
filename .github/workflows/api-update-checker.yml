@@ -1,0 +1,92 @@
+# api-update-checker.yml
+# 每個交易日定時抓取 TWSE / TPEx 資料
+#
+# 排程（台灣時間 → UTC）：
+#   14:30 → 06:30 UTC  股價
+#   18:00 → 10:00 UTC  三大法人（合併至股價檔）
+#   19:00 → 11:00 UTC  處置
+#   21:00 → 13:00 UTC  法說會
+
+name: Daily Data Fetcher
+
+on:
+  schedule:
+    - cron: "30 6 * * 1-5"   # 14:30 TWN — price
+    - cron: "0 10 * * 1-5"   # 18:00 TWN — institution
+    - cron: "0 11 * * 1-5"   # 19:00 TWN — disposal
+    - cron: "0 13 * * 1-5"   # 21:00 TWN — conference
+
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "要執行的任務"
+        required: true
+        type: choice
+        options:
+          - price
+          - institution
+          - disposal
+          - conference
+
+permissions:
+  contents: write
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Determine command
+        id: cmd
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "cmd=${{ inputs.command }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "30 6 * * 1-5" ]; then
+            echo "cmd=price" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 10 * * 1-5" ]; then
+            echo "cmd=institution" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 11 * * 1-5" ]; then
+            echo "cmd=disposal" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event.schedule }}" = "0 13 * * 1-5" ]; then
+            echo "cmd=conference" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set timezone
+        run: echo "TZ=Asia/Taipei" >> "$GITHUB_ENV"
+
+      - name: Run fetcher — ${{ steps.cmd.outputs.cmd }}
+        working-directory: mystocktool
+        run: python api_update_checker.py ${{ steps.cmd.outputs.cmd }}
+
+      - name: Commit & push data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add mystocktool/daily_data/
+          if git diff --cached --quiet; then
+            echo "No data changes to commit"
+          else
+            git commit -m "data: ${{ steps.cmd.outputs.cmd }} $(TZ=Asia/Taipei date +%Y-%m-%d)"
+            git pull --rebase
+            git push
+          fi
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs-${{ steps.cmd.outputs.cmd }}-${{ github.run_number }}
+          path: mystocktool/logs/*.log
+          retention-days: 14
