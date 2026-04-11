@@ -9,4 +9,4 @@ node_modules/
 
 # 測試資料
 !*.json
-pubilc_data/
+public_data/

@@ -73,7 +73,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add mystocktool/daily_data/
+          git add daily_data/
           if git diff --cached --quiet; then
             echo "No data changes to commit"
           else
@@ -87,5 +87,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: logs-${{ steps.cmd.outputs.cmd }}-${{ github.run_number }}
-          path: mystocktool/logs/*.log
+          path: logs/*.log
           retention-days: 14
