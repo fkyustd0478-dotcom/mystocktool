@@ -67,7 +67,6 @@ jobs:
         run: echo "TZ=Asia/Taipei" >> "$GITHUB_ENV"
 
       - name: Run fetcher — ${{ steps.cmd.outputs.cmd }}
-        working-directory: mystocktool
         run: python api_update_checker.py ${{ steps.cmd.outputs.cmd }}
 
       - name: Commit & push data
